@@ -13,13 +13,13 @@ class Command(BaseCommand):
             'caches and so on are set up correctly.')
 
     def handle(self, *args, **kw):
-        wait = getattr(settings, 'GROUP_WAIT')
+        wait = getattr(settings, 'DELAYED_MAILER_WAIT')
         if not wait:
-            print 'No GROUP_WAIT setting, using value of 2 seconds.'
+            print 'No DELAYED_MAILER_WAIT setting, using value of 2 seconds.'
         else:
-            print ('GROUP_WAIT setting being changed temporarily to 2 '
-                   'seconds from %s seconds.' % wait)
-        settings.GROUP_WAIT = 2
+            print ('DELAYED_MAILER_WAIT setting being changed temporarily '
+                   'to 2 seconds from %s seconds.' % wait)
+        settings.DELAYED_MAILER_WAIT = 2
 
         self.record = Record()
         self.record.levelname = logging.DEBUG

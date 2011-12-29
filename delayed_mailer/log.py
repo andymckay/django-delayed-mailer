@@ -29,12 +29,12 @@ class Group(object):
             cache.incr(self.counter_key)
         else:
             # First setting of the task, write a celery task to post
-            # this in GROUP_WAIT seconds.
+            # this in DELAYED_MAILER_WAIT seconds.
             #
             # We force a timeout so that if the original post fails and
             # never goes out, eventually the cache will clear again and
             # we've lost a few errors.
-            time = getattr(settings, 'GROUP_WAIT', 60)
+            time = getattr(settings, 'DELAYED_MAILER_WAIT', 60)
             cache.set_many({self.data_key: data, self.counter_key: 1},
                            timeout=time * 2)
             try:
@@ -63,7 +63,7 @@ class Group(object):
             data[self.data_key]['message'] = (
                 'Error occurred: %s times in the last %s seconds\n\n%s' % (
                     data[self.counter_key],
-                    getattr(settings, 'GROUP_WAIT', 60),
+                    getattr(settings, 'DELAYED_MAILER_WAIT', 60),
                     data[self.data_key]['message']))
 
         mail.mail_admins(data[self.data_key]['subject'],
