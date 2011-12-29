@@ -13,8 +13,8 @@ class Command(BaseCommand):
             'caches and so on are set up correctly.')
 
     def handle(self, *args, **kw):
-        wait = getattr(settings, 'DELAYED_MAILER_WAIT')
-        if not wait:
+        wait = getattr(settings, 'DELAYED_MAILER_WAIT', None)
+        if wait is None:
             print 'No DELAYED_MAILER_WAIT setting, using value of 2 seconds.'
         else:
             print ('DELAYED_MAILER_WAIT setting being changed temporarily '

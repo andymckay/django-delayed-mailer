@@ -37,6 +37,11 @@ class Group(object):
             time = getattr(settings, 'DELAYED_MAILER_WAIT', 60)
             cache.set_many({self.data_key: data, self.counter_key: 1},
                            timeout=time * 2)
+            # If memcached didn't get that, we can't do the async, it would
+            # be nice if this didn't just fail silently.
+            if not cache.get(self.data_key):
+                self.send(count=1, msg=data)
+
             try:
                 delayed_send.apply_async([self], countdown=time)
             except socket.error:
@@ -54,20 +59,24 @@ class Group(object):
     def find_group(cls, *data):
         return cls(cls.get_hash(*data))
 
-    def send(self):
-        data = cache.get_many([self.data_key, self.counter_key])
-        if not data:
-            return
-        cache.delete_many([self.data_key, self.counter_key])
-        if data[self.counter_key] > 1:
-            data[self.data_key]['message'] = (
-                'Error occurred: %s times in the last %s seconds\n\n%s' % (
-                    data[self.counter_key],
-                    getattr(settings, 'DELAYED_MAILER_WAIT', 60),
-                    data[self.data_key]['message']))
+    def send(self, count=1, msg=None):
+        # If the data is not explicitly passed through, go and look for it
+        # in memcache, then clean it out.
+        if msg is None:
+            data = cache.get_many([self.data_key, self.counter_key])
+            if not data:
+                return
+            cache.delete_many([self.data_key, self.counter_key])
+            count = data[self.counter_key]
+            msg = data[self.data_key]
 
-        mail.mail_admins(data[self.data_key]['subject'],
-                         data[self.data_key]['message'])
+        if count > 1:
+            msg['message'] = (
+                u'Error occurred: %s times in the last %s seconds\n\n%s' % (
+                    count, getattr(settings, 'DELAYED_MAILER_WAIT', 60),
+                    msg['message']))
+
+        mail.mail_admins(msg['subject'], msg['message'])
 
 
 class DelayedEmailHandler(logging.Handler):
@@ -102,6 +111,5 @@ class DelayedEmailHandler(logging.Handler):
         message = "%s\n\n%s" % (stack_trace, request_repr)
 
         self._group = Group.find_group([record.levelname,
-                                  exc_info[0],
-                                  exc_info[1]])
+                                        exc_info[0], exc_info[1]])
         self._group.set({'subject': subject, 'message': message})
