@@ -11,6 +11,19 @@ from django.test import RequestFactory
 from delayed_mailer.log import DelayedEmailHandler, Group
 
 
+def zero_error():
+    try:
+        1 / 0
+    except ZeroDivisionError:
+        return sys.exc_info()
+
+
+def attribute_error():
+    try:
+        None.lower()
+    except AttributeError:
+        return sys.exc_info()
+
 
 class Record(object):
     pass
@@ -19,12 +32,6 @@ class Record(object):
 @mock.patch('delayed_mailer.tasks.delayed_send.apply_async')
 class TestDelayedMailer(unittest.TestCase):
 
-    def divide_error(self):
-        try:
-            1/0
-        except ZeroDivisionError:
-            return sys.exc_info()
-
     def setUp(self):
         cache.clear()
         mail.outbox = []
@@ -32,7 +39,7 @@ class TestDelayedMailer(unittest.TestCase):
         self.record.levelname = logging.DEBUG
         self.record.request = RequestFactory().get('/')
         self.record.msg = 'oops'
-        self.record.exc_info = self.divide_error()
+        self.record.exc_info = zero_error()
         self.handler = DelayedEmailHandler()
 
     def test_group_same(self, celery):
@@ -74,4 +81,3 @@ class TestDelayedMailer(unittest.TestCase):
         self.handler._group.send()
         assert len(mail.outbox) == 1
         assert 'Error occurred: 2' in mail.outbox[0].body
-

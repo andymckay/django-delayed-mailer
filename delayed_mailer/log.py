@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import socket
 import traceback
 
 from django.conf import settings
@@ -36,7 +37,12 @@ class Group(object):
             time = getattr(settings, 'GROUP_WAIT', 60)
             cache.set_many({self.data_key: data, self.counter_key: 1},
                            timeout=time * 2)
-            delayed_send.apply_async([self], countdown=time)
+            try:
+                delayed_send.apply_async([self], countdown=time)
+            except socket.error:
+                # If the celery backend is down, we can't queue so just
+                # send.
+                self.send()
 
     @classmethod
     def get_hash(cls, *data):
@@ -54,10 +60,11 @@ class Group(object):
             return
         cache.delete_many([self.data_key, self.counter_key])
         if data[self.counter_key] > 1:
-            data[self.data_key]['message'] = 'Error occurred: %s times in the last %s seconds\n\n%s' % (
-                                            data[self.counter_key],
-                                            getattr(settings, 'GROUP_WAIT', 60),
-                                            data[self.data_key]['message'])
+            data[self.data_key]['message'] = (
+                'Error occurred: %s times in the last %s seconds\n\n%s' % (
+                    data[self.counter_key],
+                    getattr(settings, 'GROUP_WAIT', 60),
+                    data[self.data_key]['message']))
 
         mail.mail_admins(data[self.data_key]['subject'],
                          data[self.data_key]['message'])
