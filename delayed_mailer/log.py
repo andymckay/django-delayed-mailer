@@ -39,11 +39,11 @@ class Group(object):
                            timeout=time * 2)
             # If memcached didn't get that, we can't do the async, it would
             # be nice if this didn't just fail silently.
-            if not cache.get(self.data_key):
-                self.send(count=1, msg=data)
+            if not self.count():
+                self.mail(1, data)
 
             try:
-                delayed_send.apply_async([self], countdown=time)
+                delayed_send.apply_async([self.hash], countdown=time)
             except socket.error:
                 # If the celery backend is down, we can't queue so just
                 # send.
@@ -59,17 +59,14 @@ class Group(object):
     def find_group(cls, *data):
         return cls(cls.get_hash(*data))
 
-    def send(self, count=1, msg=None):
-        # If the data is not explicitly passed through, go and look for it
-        # in memcache, then clean it out.
-        if msg is None:
-            data = cache.get_many([self.data_key, self.counter_key])
-            if not data:
-                return
-            cache.delete_many([self.data_key, self.counter_key])
-            count = data[self.counter_key]
-            msg = data[self.data_key]
+    def send(self):
+        data = cache.get_many([self.data_key, self.counter_key])
+        if not data:
+            return
+        cache.delete_many([self.data_key, self.counter_key])
+        self.mail(data[self.counter_key], data[self.data_key])
 
+    def mail(self, count, msg):
         if count > 1:
             msg['message'] = (
                 u'Error occurred: %s times in the last %s seconds\n\n%s' % (
